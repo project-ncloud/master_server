@@ -1,9 +1,20 @@
+def getArrDict(data):
+    ret = []
+    for item in data:
+        ret.append(item.getBlock())
+    return ret
+
+
+
 class User:
     def __init__(self, username):
         self.name = username
 
     def disp(self):
         print(f'{self.name}')
+
+    def getBlock(self):
+        return self.name
 
 
 class Host:
@@ -25,6 +36,15 @@ class Host:
 
         for item in self.validUsers:
             item.disp()
+
+    def getBlock(self):
+        return {
+            "name": self.name,
+            "path": self.path,
+            "writable": self.writable,
+            "public": self.public,
+            "validUsers": getArrDict(self.validUsers)
+        }
 
     
     
@@ -58,12 +78,21 @@ class Server:
         
         return None
 
+    def getBlock(self):
+        return {
+            "name": self.name,
+            "id": str(self.id),
+            "address": self.address,
+            "autoStart": self.autoStart,
+            "hosts": getArrDict(self.hosts)
+        }
+
 
 
 
 class Nas:
-    servers:Server = []
     def __init__(self, block):
+        self.servers = []
         for item in block:
             self.servers.append(Server(item))
 
@@ -99,6 +128,15 @@ class Nas:
             return None
         else:
             return host.validUsers
+
+    def getBlock(self):
+        ret = []
+        for s in self.servers:
+            ret.append(s.getBlock())
+
+        return getArrDict(self.servers)
+
+        
         
 
 

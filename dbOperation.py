@@ -3,7 +3,7 @@ from db import Mongo
 
 
 def userExists(userName:str ,client:Mongo):
-    if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('USER_COLLECTION')):
+    if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('USER_COLLECTION')) or client.isDocExists({'username' : f'{userName.strip()}'}, getenv('PENDING_USER_COLLECTION')):
         return True
     else:
         return False

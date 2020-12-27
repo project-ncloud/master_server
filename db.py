@@ -23,6 +23,31 @@ class Mongo:
             print("An exception ocurred ::", e)
             return False, None
 
+    def remove(self, block, collectionName):
+        try:
+            collection = self.db[collectionName]
+            return True, collection.delete_one(block)
+        except Exception as e:
+            print("An exception ocurred ::", e)
+            return False, None
+
+    
+    def remove_ById(self, docId, collectionName):
+        try:
+            collection = self.db[collectionName]
+            return True, collection.delete_one({"_id" : ObjectId(docId)})
+        except Exception as e:
+            print("An exception ocurred ::", e)
+            return False, None
+
+    def remove_all(self, collectionName):
+        try:
+            collection = self.db[collectionName]
+            return True, collection.delete_many({})
+        except Exception as e:
+            print("An exception ocurred ::", e)
+            return False, None
+
     
     def get_doc(self, block, collectionName):
         collection = self.db[collectionName]
