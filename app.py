@@ -104,14 +104,14 @@ def protected():
 
 
 
-@app.route('/api/servers', methods = ['GET'])
+@app.route('/api/servers', methods = ['GET', 'POST'])
 def servers():
     block:dict = DB.get_docs({}, os.getenv('SERVER_COLLECTION'))
 
     NN = helper.Nas(block)
-    NN.disp()
+    #print(NN.getBlock())
 
-    return allowCors(jsonify("Hello"), 200)
+    return allowCors(jsonify(NN.getBlock()), 200)
 
 
 
