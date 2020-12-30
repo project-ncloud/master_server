@@ -34,6 +34,13 @@ def rejectReq(userName:str ,client:Mongo):
             return "Error ocurred while removing user from the pending list", False
 
 
+
+def getAllUsers(client:Mongo):
+    return client.get_docs({}, getenv('USER_COLLECTION'))
+
+
+
+
 def test():
     x:dict = {
         "name" : "Sourav Gain",
@@ -44,7 +51,8 @@ def test():
 
     print(x)
 
-dotenv.load_dotenv(dotenv_path='./.env')
+'''dotenv.load_dotenv(dotenv_path='./.env')
 DB = Mongo(getenv('DB_URI_STRING'), getenv('DB_NAME'))
 #msg, ret = rejectReq('indsrkr', DB)
-#print(f'{msg}')
+ret, msg = DB.update_doc({"username": "souravgain"}, {"username": "souravgain605"}, getenv('USER_COLLECTION'))
+print(f'{msg.__str__()}')'''
