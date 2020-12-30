@@ -48,6 +48,26 @@ class Mongo:
             print("An exception ocurred ::", e)
             return False, None
 
+
+    def update_doc(self, block, block2, collectionName):
+        try:
+            collection = self.db[collectionName]
+            return True, collection.update_one(block, {"$set": block2})
+        except Exception as e:
+            print("An exception ocurred ::", e)
+            return False, None
+        pass
+
+
+    def update_docById(self, docId, block2, collectionName):
+        try:
+            collection = self.db[collectionName]
+            return True, collection.update_one({"_id" : ObjectId(docId)}, {"$set": block2})
+        except Exception as e:
+            print("An exception ocurred ::", e)
+            return False, None
+        pass
+
     
     def get_doc(self, block, collectionName):
         collection = self.db[collectionName]
