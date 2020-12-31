@@ -4,7 +4,7 @@ from bson.objectid import ObjectId
 import dbOperation
 from db import Mongo
 
-def approvedReq(userName:str ,client:Mongo):
+def approveReq(userName:str ,client:Mongo):
     user:dict = client.get_doc({"username": userName}, getenv('PENDING_USER_COLLECTION'))
     
     if user == None:

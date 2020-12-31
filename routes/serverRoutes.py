@@ -10,16 +10,15 @@ from flask              import request, jsonify
 from middleWare         import allowCors, isValidKEY
 from bson.json_util     import dumps
 from userUtils          import *
+from NcloudUtils        import *
 
 
 
 
 @app.route('/servers/', methods = ['GET'])
 def getServerData():
-    if request.method == 'GET':
-        block:dict = app.DB.get_docs({}, getenv('SERVER_COLLECTION'))
-        NN = helper.Nas(block)
-        return allowCors(jsonify(NN.getBlock()), 200)
+    if request.method == 'GET': 
+        return allowCors(jsonify(getServers(app.DB)), 200)
     else:
         return allowCors(jsonify({"msg": "Bad Request"}), 400)
 
@@ -72,24 +71,25 @@ def serverOps():
 
 @app.route('/server/config/', methods = ['GET', 'POST'])
 def serverConfig():
-    data:dict = app.DB.get_doc({}, getenv('ADMIN_COLLECTION'))
+    data:dict = getNcloudConfig(app.DB)
+    if data == None:
+        return allowCors(jsonify({"msg": "Config not found"}), 400)
+
     if request.method == 'GET':
-        if data == None:
-            return allowCors(jsonify({"msg": "Config not found"}), 400)
-        
-        return allowCors(jsonify({
-            "addall_inNewHosts": data.get('addall_inNewHosts'),
-            "autoStartSrvr": data.get('autoStartSrvr'),
-            "allowRegistration": data.get('allowRegistration')
-        }))
+        return allowCors(jsonify(data))
 
     else:
         req = request.json
-        block = {
-            "addall_inNewHosts": data.get('addall_inNewHosts') if req.get('addall_inNewHosts') == None else req.get('addall_inNewHosts'),
-            "autoStartSrvr": data.get('autoStartSrvr') if req.get('autoStartSrvr') == None else req.get('autoStartSrvr'),
-            "allowRegistration": data.get('allowRegistration') if req.get('allowRegistration') == None else req.get('allowRegistration')
-        }
+
+        if req == None:
+            return allowCors(jsonify({"msg": "Data not found from the request"}), 400)
+
+        block:dict = {}
+        for item in data:
+            # Pattern -     "autoStartSrvr": data.get('autoStartSrvr') if req.get('autoStartSrvr') == None else req.get('autoStartSrvr'),
+            block.setdefault(item.__str__(), data.get(item.__str__()) if req.get(item.__str__()) == None else req.get(item.__str__()))
+
+
         ret, msg = app.DB.update_doc({"name" : "admin"}, block, getenv('ADMIN_COLLECTION'))
         if ret == True:
             return allowCors(jsonify({"msg": "Configs updated successfully"}), 200)
@@ -103,7 +103,7 @@ def serverControl():
     if request.method == 'GET':
         try:
             res = requests.get(f'http://{req.get("address")}/alive/')
-            if res.status_code == 200:
+            if res.ok:
                 resJson = res.json()
                 return allowCors(jsonify({"alive" : resJson.get('status')}))
             else:
@@ -112,5 +112,17 @@ def serverControl():
             print("An exception ocurred ::", e)
             return allowCors(jsonify({"msg" : "Server probably Switched OFF","alive" : None}))
     else:
-        return 'Get Hello'
+        try:
+            print(f'Amer request - {req.get("action")}')
+            res = requests.post(f'http://{req.get("address")}/alive/', json = {
+                "action" : req.get("action")
+            })
+            if res.ok:
+                resJson = res.json()
+                return allowCors(jsonify({"alive" : resJson.get('status')}))
+            else:
+                raise Exception
+        except Exception as e:
+            print("An exception ocurred ::", e)
+            return allowCors(jsonify({"msg" : "Server probably Switched OFF","alive" : None}))
     
