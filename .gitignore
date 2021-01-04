@@ -2,3 +2,4 @@ __pycache__
 .env
 api_doc.txt
 tmp
+testGround.py
