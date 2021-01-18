@@ -6,8 +6,9 @@ import requests
 
 from os                 import getenv
 from app                import app
+from app                import end, final
 from flask              import request, jsonify
-from middleWare         import allowCors, isValidKEY
+from middleWare         import allowCors, isValidKEY, onlyAdminAllowed, blockSpecialUsername, onlyselfAllowed
 from bson.json_util     import dumps
 from userUtils          import *
 from NcloudUtils        import *
@@ -18,49 +19,85 @@ from flask_jwt_extended import (
 )
 
 
-@app.route('/api/init/', methods = ['GET'])
+@app.route('/init/', methods = ['GET'])
 def init():
-    response = jsonify(message="Simple server is running")
-    return allowCors(response)
+    return allowCors(jsonify({"msg": "Server is running"}))
 
 
 
 @app.route('/register/', methods = ['POST'])
+@blockSpecialUsername
 def register():
     req = request.form
     userName:str = req['username']
 
-    # Checking if registration allowed or not
-    res = requests.get(f'http://{getenv("OWN_URL")}/server/config/')
-    serverConfig:dict = res.json()
-    if serverConfig.get('allowRegistration') != True:
-        return allowCors(jsonify({"msg" : "Registration not allowed", "status" : False}), 400)
+    # chain condition
+    ret = False
 
-    # Deciding if the registered user data need to save pending section or main database
-    collection:str = getenv('USER_COLLECTION') if serverConfig.get('pendingNewUser') != True else getenv('PENDING_USER_COLLECTION')
-
-    # Some other checks regarding username and KEY
-    isExists:bool = dbOperation.userExists(userName.strip().lower(), app.DB)
-    allowed:bool = isValidKEY(req['KEY'], req['userType'])
-
-    if isExists:
-        return allowCors(jsonify({"msg" : "User already exists", "status" : False}))
-
-    if not allowed:
-        return allowCors(jsonify({"msg" : "KEY do not match", "status" : False}), 400)
-
-
-    # Creating user block to insert into the database
-    block = {
-        "name" : f'{req["name"].strip()}',
-        "username" : f'{req["username"].strip().lower()}',
-        "password" : f'{req["password"].strip()}',
-        "type" : f'{req["userType"].strip()}',
+    # response block
+    resBlock = {
+        "msg" : None,                       # str
+        "exists" : None,                    # bool
+        "pending" : None,                   # bool
+        "registration_allowed" : None,      # bool
+        "is_valid_key" : None,              # bool
+        "status" : False                    # bool
     }
-    if app.DB.insert([block], collection) != None:
-        return allowCors(jsonify({"msg" : "Added User", "status" : True}))
-    
-    return allowCors(jsonify({"msg" : "Failed to add user", "status" : False}))
+
+    try:
+        # Fetching server config data
+        res = requests.get(f'http://{getenv("OWN_URL")}/server/config/')
+        serverConfig:dict = res.json()
+
+        # Checking if registration allowed or not
+        if serverConfig.get('allowRegistration') != True:
+            resBlock['msg'] = "Registration not allowed"
+            resBlock['registration_allowed'] = False
+            raise end(Exception)
+
+        # Deciding if the registered user data need to save pending section or main database
+        collection:str = getenv('USER_COLLECTION') if serverConfig.get('pendingNewUser') != True else getenv('PENDING_USER_COLLECTION')
+
+        # Some other checks regarding username and KEY
+        isExists, pending = dbOperation.userExists(userName.strip().lower(), app.DB)
+        allowed:bool = isValidKEY(req['KEY'])
+
+        if isExists:
+            resBlock['msg'] = "User already exists"
+            resBlock['pending'] = pending
+            resBlock['exists'] = True
+            raise end(Exception)
+        
+
+        if not allowed:
+            resBlock['msg'] = "Incorrect key"
+            resBlock['is_valid_key'] = False
+            raise end(Exception)
+
+
+        # Creating user block to insert into the database
+        block = {
+            "name" : f'{req["name"].strip()}',
+            "username" : f'{req["username"].strip().lower()}',
+            "password" : f'{req["password"].strip()}',
+        }
+
+        if app.DB.insert([block], collection) != None:
+            resBlock['msg'] = "User added"
+            resBlock['status'] = True
+            raise end(Exception)
+        
+        resBlock['msg'] = "Failed to add user"
+        raise end(Exception)
+        
+        
+    except end:
+        return allowCors(jsonify(resBlock))
+
+
+
+
+
 
 
 
@@ -69,73 +106,166 @@ def login():
     req = request.form
     username:str = req['username']
 
-    isExists:bool = dbOperation.userExists(username.strip().lower(), app.DB)
-    
-    if isExists:
-        block = app.DB.get_doc({
-            "username" : username
-        }, getenv('USER_COLLECTION'))
+    # response block
+    resBlock = {
+        "msg" : None,                       # str
+        "exists" : None,                    # bool
+        "pending" : None,                   # bool
+        "access_token": None,               # str
+        "status" : False                    # bool
+    }
 
-        if block.get('password') == req['password'].strip():
-            accessToken = create_access_token(identity = block.get('username'))
-            response:response_class = jsonify({"msg" : "Login Sucessful", "status" : True, "access_token" : accessToken })
-            response.headers.add('Authorization', 'Bearer ' + accessToken)
-            return allowCors(response)
+    try:
+        isExists, pending = dbOperation.userExists(username.strip().lower(), app.DB)
+
+        resBlock['exists'] = isExists
+        resBlock['pending'] = pending
+
+        if not isExists:
+            resBlock['msg'] = f'{req["username"]} not exists'
+            raise end(Exception)
+        
+        elif isExists and pending:
+            resBlock['msg'] = f'{req["username"]} is in pending list'
+            raise end(Exception)
+        
         else:
-            return allowCors(jsonify({"msg" : "Password Does not match", "status" : False}), 401)
+            # Assuming that password is incorrect
+            resBlock['msg'] = "Password Incorrect"
 
-    return allowCors(jsonify({"msg" : "Username does not exists", "status" : False}), 401)
+            block = app.DB.get_doc({
+                "username" : username.strip().lower()
+            }, getenv('USER_COLLECTION'))
+
+            if block.get('password') == req['password'].strip():
+                accessToken = create_access_token(identity = block.get('username').lower())
+                resBlock['msg'] = "Login Sucessful"
+                resBlock['status'] = True
+                resBlock['access_token'] = accessToken
+
+            raise end(Exception)
+
+    except end:
+        return allowCors(jsonify(resBlock))
 
 
-@app.route('/admin/', methods = ['post'])
+
+@app.route('/admin/', methods = ['POST'])
 def adminLogin():
     req = request.form
 
+    # response block
+    resBlock = {
+        "msg": None,            # str
+        "access_token": None,   # str
+        "status": False         # bool
+    }
+
     block:dict = app.DB.get_doc({"name" : 'admin'}, getenv('ADMIN_COLLECTION'))
 
-    if req['password'] != '' and req['password'] == block.get('key'):
-        return allowCors(jsonify({"msg" : "Logged in", "status" : True}), 200)
-    else:
-        return allowCors(jsonify({"msg" : "Password doesnt match", "status" : False}), 401)
+    # Assuming that password is incorrect
+    resBlock['msg'] = "Password Incorrect"
+
+    if req['password'] != '' and req['password'] != None and req['password'] == block.get('key'):
+        accessToken = create_access_token(identity = 'admin')
+        
+        resBlock['msg'] = "Login Successful"
+        resBlock['access_token'] = accessToken
+        resBlock['status'] = True
+
+    return allowCors(jsonify(resBlock))
 
 
 
-@app.route('/api/users/', methods = ['GET', 'DELETE'])
+@app.route('/api/users/', methods = ['GET'])
 def usersOps():
-    if request.method == 'GET':
-        block:dict = app.DB.get_docs({}, getenv('USER_COLLECTION'))
-        tmp = []
+    req = request.json
+
+    user_type = "pending"
+    if req.get('type') != 'pending':
+        user_type = "normal"
+
+
+    resBlock = {
+        "msg" : None,
+        "users": [],         # user info blocks
+        "status": False      # bool
+    }
+
+    try:
+        block:dict = app.DB.get_docs({}, getenv('PENDING_USER_COLLECTION' if user_type == "pending" else 'USER_COLLECTION'))
+
+        if block == None:
+            resBlock['msg'] = "No users found"
+            raise end(Exception)
+        
         for item in block:
             item.pop('password')
             item.pop('_id')
-            tmp.append(item)
+            resBlock['users'].append(item)
+
+        resBlock['status'] = True
+        resBlock['msg'] = "All users fetched successfully"
+        raise end(Exception)
         
-        return allowCors(jsonify(tmp))
-    else:
-        ret, dummy = app.DB.remove_all({}, getenv('USER_COLLECTION'))
-        if ret == True:
-            return allowCors(jsonify({"msg" : "Succefully Deleted"}))
-        else:
-            return allowCors(jsonify({"msg" : "Error ocurred while deleting users"}), 400)
+    except end:
+        return allowCors(jsonify(resBlock))
+
+
+
+"""
+ret, dummy = app.DB.remove_all({}, getenv('USER_COLLECTION'))
+            if ret == True:
+                return allowCors(jsonify({"msg" : "Succefully Deleted"}))
+            else:
+                return allowCors(jsonify({"msg" : "Error ocurred while deleting users"}), 400)
+"""
 
 
 
 @app.route('/api/user/', methods = ['POST', 'DELETE'])
+@jwt_required
+@onlyAdminAllowed
 def userOps():
     # Assigning only json data
     req = request.json
 
-    # Checking if the client sent json data with the request.
-    if req == None:
-        return allowCors(jsonify({"msg" : "No JSON Data found"}),400)
+    '''
+    What We expecting
+    {
+        "username" : "xxxxx"
+    }
+    '''
 
-    # POST - Approve Users from the pending section
-    # Rules - If <addall_inNewHosts> True then server will going to add the user into all the PiServer
-    if request.method == 'POST':
-        
-        #Approve the user
-        msg, ret = approveReq(req.get('username'), app.DB)
-        if ret == True:
+    # response block
+    resBlock = {
+        "msg" : None,
+        "error":[],
+        "status" : False
+    }
+
+    try:
+        # Checking if the client sent json data with the request.
+        if req == None or req.get('username').strip() == '' or req.get('username') == None:
+            resBlock['msg'] = "No JSON data found"
+            raise end(Exception)
+
+
+
+
+        # POST - Approve Users from the pending section
+        # Rules - If <addall_inNewHosts> True then server will going to add the user into all the PiServer
+        if request.method == 'POST':
+            
+            #Approve the user
+            msg, ret = approveReq(req.get('username'), app.DB)
+
+            if ret != True:
+                resBlock['msg'] = msg
+                raise end(Exception)
+
+            userData:dict = app.DB.get_doc({"username": req.get('username')}, getenv('USER_COLLECTION'))
+
 
             # Fetching Ncloud configs from the database
             config:dict = getNcloudConfig(app.DB)
@@ -149,104 +279,198 @@ def userOps():
                 # 0 = No Error | 0 < = Error
                 operationStatus = 0
 
+                operationLimit = len(servers)
+
+                # Looping through the server data to add the username into each server's host
+                for server in servers:
+                    hosts = server['hosts']
+                    try:
+                        # Sending request to the Pi Server to add the username to all of it's hosts
+                        res = requests.post(f'http://{server.get("address")}/users/', json = {
+                            "username" : req.get("username"),
+                            "password" : userData.get("password")
+                        })
+
+                        if not res.ok:
+                            raise Exception
+
+                        for host in hosts:
+                            host['validUsers'].append(req.get("username"))
+
+                        operationStatus += 1
+
+                    except Exception as e:
+                        print(e.__str__())
+                        # Error block created for giving some information about server oparation error
+                        errorBLK = {
+                            "server_name" : server.get("name"),
+                            "server_address" : server.get("address")
+                        }
+                        resBlock['error'].append(errorBLK)
+
+                    app.DB.update_doc({"name" : server.get('name')}, {"hosts" : hosts}, getenv('SERVER_COLLECTION'))
+
+                
+                        
+                if operationStatus == operationLimit:
+                    pass
+                elif operationStatus == 0:
+                    resBlock['msg'] = "Failed while adding into all servers"
+                    raise end(Exception)
+                elif operationStatus > 0 and operationStatus < operationLimit:
+                    resBlock['msg'] = "Some operations failed while adding into some servers"
+                    raise final(Exception)
+
+
+            resBlock['msg'] = "Operation Successful"
+            resBlock['status'] = True
+            raise final(Exception)
+
+
+        # Delete User
+        else:
+
+            # User is only available in pending section.
+            # So we dont need to handle the main user collection while removing user
+            if req.get("type").lower() == "pending":
+                msg, ret = rejectReq(req.get('username'), app.DB)
+
+                resBlock['msg'] = msg
+                resBlock['status'] = ret
+
+                if ret != True:
+                    raise end(Exception)
+                else:
+                    raise final(Exception)
+
+            
+            # Deleting username from main line
+            elif req.get("type").lower() == "normal":
+
+                # Check if all the servers are running or not.
+                # Its very important to make sure that every server is running. 
+                # Otherwise it will create conflict with the database
+                if allAlive(app.DB) == False and getenv('TYPE') == "production":
+                    resBlock['msg'] = "All the servers have to be running while deleting user from main line"
+                    raise end(Exception)
+
+
+                userData:dict = app.DB.get_doc({"username": req.get('username')}, getenv('USER_COLLECTION'))
+
+                if userData == None:
+                    resBlock['msg'] = "User doesn't exists"
+                    raise end(Exception)
+
+
+                # Fetching all Pi Server_data from the database
+                servers = getServers(app.DB)
+
+                # Decision variable to ensure that all the operations are executing successfully
+                # 0 = No Error | 0 < = Error
+                operationStatus = 0
+
+                operationLimit = 0
+
                 # Looping through the server data to add the username into each server's host
                 for server in servers:
                     hosts = server.get('hosts')
+
                     for host in hosts:
-                        try:
-                            # Sending request to the Pi Server to add the username to all of it's hosts
-                            res = requests.post(f'http://{server.get("address")}/Pending', json = {
-                                "username" : req.get("username")
-                            })
+                        validUsers = host.get('validUsers')
+                        isExists = req.get('username').lower() in validUsers
 
-                            if res.ok:
-                                print(f'{req.get("username")} added into {host.get("name")}')
-                            else:
-                                raise Exception
-                        except Exception as e:
-                            operationStatus += 1
-                            print(f'{req.get("username")} failed while adding into {host.get("name")}')
-                        
+                        if isExists == True:
+                            try:
+                                operationLimit += 1
+                                res = requests.delete(f'http://{server.get("address")}/user/', json = {
+                                    "username" : req.get('username'),
+                                    "password" : userData.get("password"),
+                                    "hostname" : host.get("name")
+                                })
 
-                if operationStatus != 0:
-                    return allowCors(jsonify({"msg": "Some targets are failed"}),400)
+                                if res.ok or getenv('TYPE') == "dev":
+                                    operationStatus += 1
+                                    validUsers.remove(req.get("username"))
+                                    print(f'{req.get("username")} removed from {host.get("name")}')
+                                else:
+                                    raise Exception
+                            except Exception as e:
+                                errorBLK = {
+                                    "server_name" : server.get("name"),
+                                    "server_address" : server.get("address"),
+                                    "host_name" : host.get("name")
+                                }
+                                resBlock['error'].append(errorBLK)
 
-            return allowCors(jsonify({"msg": "Success"}))
-              
-        else:
-            print("Error ocurred :: ", msg)
-            return allowCors(jsonify({"msg" : "Failed while aproving"}),401)
+                    host.setdefault('validUsers', validUsers)
+                    app.DB.update_doc({"name" : server.get('name')}, {"hosts" : hosts}, getenv('SERVER_COLLECTION'))
+                    
 
-    # Delete User
-    else:
 
-        # User is only available in pending section.
-        # So we dont need to handle the main user collection while removing user
-        if req.get("type").lower() == "pending":
-            msg, ret = rejectReq(req.get('username'), app.DB)
-            if ret == True:
-                return allowCors(jsonify({"msg": "Successfully removed"}))
+                # Removing Username from main line database
+                # Because we know that all the servers are on and all removed the username from their servers
+                if operationStatus == operationLimit:
+                    ret, dummy = app.DB.remove({"username" : req.get('username')}, getenv('USER_COLLECTION'))
+
+                    if not ret:
+                        resBlock['msg'] = "Error ocurred while removing user from db"
+                        raise end(Exception)
+
+                elif operationStatus > 0 and operationStatus < operationLimit:
+                    resBlock['msg'] = "Aborted remove operation from user list because some of the operation failed"
+                    raise final(Exception)
+
+                elif operationStatus == 0:
+                    resBlock['msg'] = "Failed while removing from all servers"
+                    raise end(Exception)
+
+                resBlock['msg'] = "Operation Successful"
+                resBlock['status'] = True
+                raise final(Exception)
+                 
             else:
-                return allowCors(jsonify({"msg": "Error ocurred while removing the user"}),400)
+                resBlock['msg'] = "Bad request"
+                raise end(Exception)
+
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+    except final:
+        return allowCors(jsonify(resBlock))
+
+# Delete all the pending user from pending section
+@app.route('/api/users/', methods = ['DELETE'])
+@jwt_required
+@onlyAdminAllowed
+def pendingUserOps():
+    # response block
+    resBlock = {
+        "msg" : None,
+        "error":[],
+        "status" : False
+    }
+
+    try:
+        ret, dummy = app.DB.remove_all({}, getenv('PENDING_USER_COLLECTION'))
+
+        if not ret:
+            resBlock['msg'] = "Failed while removing all pending users from pending section"
+            raise end(Exception)
         
-        # Deleting username from main line
-        elif req.get("type").lower() == "normal":
+        resBlock['msg'] = "Operation successful"
+        resBlock['status'] = True
+        raise final(Exception)
 
-            # Check if all the servers are running or not.
-            # Its very important to make sure that every server is running. 
-            # Otherwise it will create conflict with the database
-            if allAlive(app.DB) == False:
-                return allowCors(jsonify({"msg": "All the servers have to be running while deleting user from main line"}),401)
-
-
-            # Fetching all Pi Server_data from the database
-            servers = getServers(app.DB)
-
-            # Decision variable to ensure that all the operations are executing successfully
-            # 0 = No Error | 0 < = Error
-            operationStatus = 0
-
-            # Looping through the server data to add the username into each server's host
-            for server in servers:
-                hosts = server.get('hosts')
-
-                for host in hosts:
-                    validUsers = host.get('validUsers')
-                    isExists = req.get('username').lower() in validUsers
-
-                    if isExists == True:
-                        try:
-                            res = requests.get(f'http://{server.get("address")}/Pending/', json = {
-                                "username" : req.get('username'),
-                            })
-
-                            if res.ok:
-                                validUsers.remove(req.get("username"))
-                                print(f'{req.get("username")} removed from {host.get("name")}')
-                            else:
-                                raise Exception
-                        except Exception as e:
-                            operationStatus += 1
-                            print(f'{req.get("username")} failed while removing from {host.get("name")}')
-                host.setdefault('validUsers', validUsers)
-                app.DB.update_doc({"name" : server.get('name')}, {"hosts" : hosts}, getenv('SERVER_COLLECTION'))
-                
-
-            # If some targets are failed, we will not remove the username from main line database,
-            # Because there are maybe some Pi Servers turned off and if we remove username in that situation, it will create unstable situation
-            if operationStatus != 0 :
-                return allowCors(jsonify({"msg": "Some targets are failed"}),400)
-            
-            # Removing Username from main line database
-            # Because we know that all the servers are on and all removed the username from their servers
-            ret, dummy = app.DB.remove({"username" : req.get('username')}, getenv('USER_COLLECTION'))
-
-            if ret:
-                return allowCors(jsonify({"msg": "Operation successful"}))
-            else:
-                return allowCors(jsonify({"msg": "Error ocurred while removing user from db"}))
-                
-        else:
-            return allowCors(jsonify({"msg": "Bad request"}),400)
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+    except final:
+        return allowCors(jsonify(resBlock))
 
 
+
+# Change the user password
+@app.route('/api/user/password/', methods = ['POST'])
+@jwt_required
+@onlyselfAllowed
+def changePassword():
+    # Pending Task
+    return allowCors(jsonify({}))

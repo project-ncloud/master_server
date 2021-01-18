@@ -3,10 +3,12 @@ from db import Mongo
 
 
 def userExists(userName:str ,client:Mongo):
-    if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('USER_COLLECTION')) or client.isDocExists({'username' : f'{userName.strip()}'}, getenv('PENDING_USER_COLLECTION')):
-        return True
+    if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('USER_COLLECTION')):
+        return True, False
+    if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('PENDING_USER_COLLECTION')):
+        return True, True
     else:
-        return False
+        return False, None
 
 
 def isPassCorrect(userName:str, password:str, client:Mongo):

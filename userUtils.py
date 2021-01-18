@@ -8,7 +8,7 @@ def approveReq(userName:str ,client:Mongo):
     user:dict = client.get_doc({"username": userName}, getenv('PENDING_USER_COLLECTION'))
     
     if user == None:
-        return "User Name doesn't exists", False
+        return "Username doesn't exists", False
     else:
         x = user.copy()
         p_id = x.pop('_id')
@@ -25,7 +25,7 @@ def rejectReq(userName:str ,client:Mongo):
     user:dict = client.get_doc({"username": userName}, getenv('PENDING_USER_COLLECTION'))
     
     if user == None:
-        return "User Name doesn't exists", False
+        return "Username doesn't exists", False
     else:
         ret , msg = client.remove({"username" : userName}, getenv('PENDING_USER_COLLECTION'))
         if ret == True:

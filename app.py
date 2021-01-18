@@ -15,6 +15,14 @@ from flask_jwt_extended import (
     get_jwt_identity
 )
 
+# end and final classes are exception class but they meant to
+# be used as goto statement for cleaner code
+class end(Exception):
+    pass
+
+class final(Exception):
+    pass
+
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = getenv('SECRET_KEY')
