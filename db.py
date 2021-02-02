@@ -90,23 +90,3 @@ class Mongo:
         ret = self.get_docById(docId, collectionName)
         return False if ret == None else True
 
-
-
-
-
-
-    
-
-        
-
-
-'''x:Mongo = Mongo('mongodb://localhost:27017/', 'test')
-
-block = {
-    "_id" : "5fdee8e175152ddc9e49a509"
-}
-
-ret = x.get_docs({}, 'hello')
-
-for item in ret:
-    print(item.get('name'))'''

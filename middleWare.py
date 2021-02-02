@@ -14,10 +14,7 @@ def onlyAdminAllowed(func):
 def blockSpecialUsername(func):
     @wraps(func)
     def decorator(*args, **kwargs):
-        req = request.form
-
-        if req.get('username') == None:
-            req = request.json
+        req = request.json
             
         if req.get('username').lower() in getenv('RESTRICT_KEYWORD'): return allowCors(jsonify({"msg":"Username not allowed", "status": False}), 400)
         return func(*args, **kwargs)

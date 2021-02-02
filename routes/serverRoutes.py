@@ -21,15 +21,15 @@ from flask_jwt_extended import (
 
 
 @app.route('/servers/', methods = ['GET'])
-@jwt_required
-@onlyAdminAllowed
+#@jwt_required
+#@onlyAdminAllowed
 def getServerData():
     return allowCors(jsonify(getServers(app.DB)), 200)
 
 
 
 @app.route('/user/servers/', methods = ['GET'])
-@jwt_required
+#@jwt_required
 @onlyselfAllowed
 def getServerDataForUser():
     req = request.json
@@ -284,7 +284,46 @@ def removeServer():
 
 
 
-@app.route('/server/control/', methods = ['GET', 'POST'])
+
+@app.route('/server/control/<address>', methods = ['GET'])
+def getServerInfo(address):
+    addr:str = str(address)
+
+    # Response block
+    resBlock = {
+        "msg" : None,
+        "is_running": None,
+        "status" : False
+    }
+
+    try:
+        if addr == None or addr.strip() == '':
+            resBlock['msg'] = "No JSON data found"
+            raise end(Exception)
+
+        try:
+            res = requests.get(f'http://{addr}/alive/')
+            if not res.ok:
+                raise Exception
+        except Exception as e:
+            resBlock['msg'] = "No response from the server"
+            resBlock['is_running'] = False
+            raise end(Exception)
+
+        resJson = res.json()
+        resBlock['msg'] = "Operation successful"
+        resBlock['is_running'] = resJson.get('status')
+        resBlock['status'] = True
+        raise final(Exception)
+
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+    except final:
+        return allowCors(jsonify(resBlock))
+
+
+
+@app.route('/server/control/', methods = ['POST'])
 def serverControl():
     req = request.json
 
@@ -296,17 +335,14 @@ def serverControl():
     }
 
     try:
-        if isRequiredDataAvailable(req, ["address"] if request.method == 'GET' else ["address", "action"]) == False:
+        if isRequiredDataAvailable(req,["address", "action"]) == False:
             resBlock['msg'] = "No JSON data found"
             raise end(Exception)
 
         try:
-            if request.method == 'GET':
-                res = requests.get(f'http://{req.get("address")}/alive/')
-            else:
-                res = requests.post(f'http://{req.get("address")}/alive/', json = {
-                    "action" : req.get("action")
-                })
+            res = requests.post(f'http://{req.get("address")}/alive/', json = {
+                "action" : req.get("action")
+            })
             if not res.ok:
                 raise Exception
         except Exception as e:

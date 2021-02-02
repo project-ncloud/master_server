@@ -26,9 +26,9 @@ def init():
 
 
 @app.route('/register/', methods = ['POST'])
-@blockSpecialUsername
+#@blockSpecialUsername
 def register():
-    req = request.form
+    req = request.json
     userName:str = req['username']
 
     # chain condition
@@ -46,13 +46,14 @@ def register():
 
     try:
         # Fetching server config data
-        res = requests.get(f'http://{getenv("OWN_URL")}/server/config/')
-        serverConfig:dict = res.json()
+        res = requests.get(f'http://{getenv("OWN_URL")}/ncloud/config/')
+        serverConfig:dict = res.json().get('data')
 
         # Checking if registration allowed or not
+
         if serverConfig.get('allowRegistration') != True:
             resBlock['msg'] = "Registration not allowed"
-            resBlock['registration_allowed'] = False
+            resBlock['registration_allowed'] = serverConfig.get('allowRegistration')
             raise end(Exception)
 
         # Deciding if the registered user data need to save pending section or main database
@@ -103,7 +104,7 @@ def register():
 
 @app.route('/login/', methods = ['POST'])
 def login():
-    req = request.form
+    req = request.json
     username:str = req['username']
 
     # response block
@@ -152,7 +153,7 @@ def login():
 
 @app.route('/admin/', methods = ['POST'])
 def adminLogin():
-    req = request.form
+    req:dict = request.json
 
     # response block
     resBlock = {
@@ -166,7 +167,7 @@ def adminLogin():
     # Assuming that password is incorrect
     resBlock['msg'] = "Password Incorrect"
 
-    if req['password'] != '' and req['password'] != None and req['password'] == block.get('key'):
+    if req.get('password') != '' and req.get('password') != None and req.get('password') == block.get('key'):
         accessToken = create_access_token(identity = 'admin')
         
         resBlock['msg'] = "Login Successful"

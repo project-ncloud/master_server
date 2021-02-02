@@ -28,15 +28,18 @@ app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = getenv('SECRET_KEY')
 jwt = JWTManager(app)
 
+# Setup Database
 app.DB = Mongo(getenv('DB_URI_STRING'),getenv('DB_NAME'))
 
+
+# Importing other routes
 import routes.mainRoutes
 import routes.hostRoutes
 import routes.serverRoutes
 
 
 
-
+# Example of protected Route
 @app.route('/protected', methods=['GET'])
 @jwt_required
 def protected():
@@ -46,7 +49,13 @@ def protected():
 
 
 
-
+# Where server starts
 if __name__ == '__main__':
+    # Load environment variables
     dotenv.load_dotenv(dotenv_path='./.env')
-    app.run(debug=True)
+
+    # setup server vars
+    DEBUG = True if getenv('TYPE') == 'dev' else False
+
+    # Run server
+    app.run(debug = DEBUG, host = '0.0.0.0', port = getenv('PORT'), load_dotenv = True)
