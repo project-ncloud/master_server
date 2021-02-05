@@ -16,6 +16,31 @@ class User:
     def getBlock(self):
         return self.name
 
+class Admin:
+    def __init__(self, block:dict):
+        self.sharedUsers:User = []
+        self.name = ''
+        
+        if block != None:
+            self.name = block.get('name')
+            for item in block.get('sharedUsers'):
+                self.sharedUsers.append(User(item))
+
+            
+
+    def disp(self):
+        print(f'_______\nAdmin - {self.name}')
+        print(f'_______\nShared Users - ')
+
+        for item in self.sharedUsers:
+            item.disp()
+
+    def getBlock(self):
+        return {
+            "name" : self.name,
+            "sharedUsers" : getArrDict(self.sharedUsers)
+        }
+
 
 class Host:
     def __init__(self, block:dict):
@@ -23,6 +48,7 @@ class Host:
         self.path = block.get('path')
         self.writable = block.get('writable')
         self.public = block.get('public')
+        self.admin = Admin(block.get('admin'))
         self.validUsers:User = []
         for item in block.get('validUsers'):
             self.validUsers.append(User(item))
@@ -43,6 +69,7 @@ class Host:
             "path": self.path,
             "writable": self.writable,
             "public": self.public,
+            "admin": self.admin.getBlock(),
             "validUsers": getArrDict(self.validUsers)
         }
 

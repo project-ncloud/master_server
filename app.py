@@ -36,6 +36,7 @@ app.DB = Mongo(getenv('DB_URI_STRING'),getenv('DB_NAME'))
 import routes.mainRoutes
 import routes.hostRoutes
 import routes.serverRoutes
+import routes.userAdminRoutes
 
 
 

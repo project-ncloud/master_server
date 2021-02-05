@@ -1,12 +1,24 @@
 from os                 import getenv
 from functools          import wraps
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, get_jwt_claims
 from flask              import jsonify, request
 
 def onlyAdminAllowed(func):
     @wraps(func)
     def decorator(*args, **kwargs):
-        if get_jwt_identity() != "admin": return allowCors(jsonify({"msg":"Bad user", "status": False}), 400)
+        if get_jwt_identity() != "admin": return allowCors(jsonify({"msg":"Bad user", "status": False}), 401)
+        return func(*args, **kwargs)
+    return decorator
+
+
+def VIPAllowed(func):
+    @wraps(func)
+    def decorator(*args, **kwargs):
+        tokenData = get_jwt_claims()
+
+        if not (tokenData.get('is_admin') == True or tokenData.get('is_manager') == True):
+            return allowCors(jsonify({"msg":"Bad user", "status": False}), 401)
+
         return func(*args, **kwargs)
     return decorator
 
