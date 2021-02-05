@@ -2,13 +2,28 @@ from os import getenv
 from db import Mongo
 
 
-def userExists(userName:str ,client:Mongo):
+def userExists(userName:str, client:Mongo):
+    # Checking if that user is existed in User Section
     if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('USER_COLLECTION')):
-        return True, False
+        return True, False, False
+    
+    # Checking if that user is existed in Pending Section
     if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('PENDING_USER_COLLECTION')):
-        return True, True
+        return True, True, False
+   
+    # Checking if that user is existed in Manager Section
+    if is_manager(userName, client):
+        return True, False, True
+        
+    return False, None, None
+
+
+
+def is_manager(userName:str, client:Mongo):
+    if client.isDocExists({'username' : f'{userName.strip()}'}, getenv('MANAGER_COLLECTION')):
+        return True
     else:
-        return False, None
+        return False
 
 
 def isPassCorrect(userName:str, password:str, client:Mongo):

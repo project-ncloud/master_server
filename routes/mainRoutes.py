@@ -8,7 +8,7 @@ from os                 import getenv
 from app                import app
 from app                import end, final
 from flask              import request, jsonify
-from middleWare         import allowCors, isValidKEY, onlyAdminAllowed, blockSpecialUsername, onlyselfAllowed
+from middleWare         import *
 from bson.json_util     import dumps
 from userUtils          import *
 from NcloudUtils        import *
@@ -39,6 +39,7 @@ def register():
         "msg" : None,                       # str
         "exists" : None,                    # bool
         "pending" : None,                   # bool
+        "manager" : None,                   # bool
         "registration_allowed" : None,      # bool
         "is_valid_key" : None,              # bool
         "status" : False                    # bool
@@ -60,13 +61,14 @@ def register():
         collection:str = getenv('USER_COLLECTION') if serverConfig.get('pendingNewUser') != True else getenv('PENDING_USER_COLLECTION')
 
         # Some other checks regarding username and KEY
-        isExists, pending = dbOperation.userExists(userName.strip().lower(), app.DB)
+        isExists, pending, isManager = dbOperation.userExists(userName.strip().lower(), app.DB)
         allowed:bool = isValidKEY(req['KEY'])
 
         if isExists:
             resBlock['msg'] = "User already exists"
             resBlock['pending'] = pending
             resBlock['exists'] = True
+            resBlock['manager'] = isManager
             raise end(Exception)
         
 
@@ -112,15 +114,17 @@ def login():
         "msg" : None,                       # str
         "exists" : None,                    # bool
         "pending" : None,                   # bool
+        "manager" : None,                   # bool
         "access_token": None,               # str
         "status" : False                    # bool
     }
 
     try:
-        isExists, pending = dbOperation.userExists(username.strip().lower(), app.DB)
+        isExists, pending, isManager = dbOperation.userExists(username.strip().lower(), app.DB)
 
         resBlock['exists'] = isExists
         resBlock['pending'] = pending
+        resBlock['manager'] = isManager
 
         if not isExists:
             resBlock['msg'] = f'{req["username"]} not exists'
@@ -136,10 +140,10 @@ def login():
 
             block = app.DB.get_doc({
                 "username" : username.strip().lower()
-            }, getenv('USER_COLLECTION'))
+            }, getenv('USER_COLLECTION' if not isManager else 'MANAGER_COLLECTION'))
 
             if block.get('password') == req['password'].strip():
-                accessToken = create_access_token(identity = block.get('username').lower())
+                accessToken = create_access_token(identity = block.get('username').lower(), user_claims={'is_manager' : resBlock.get('manager')})
                 resBlock['msg'] = "Login Sucessful"
                 resBlock['status'] = True
                 resBlock['access_token'] = accessToken
@@ -168,7 +172,7 @@ def adminLogin():
     resBlock['msg'] = "Password Incorrect"
 
     if req.get('password') != '' and req.get('password') != None and req.get('password') == block.get('key'):
-        accessToken = create_access_token(identity = 'admin')
+        accessToken = create_access_token(identity = 'admin', user_claims={'is_admin' : True})
         
         resBlock['msg'] = "Login Successful"
         resBlock['access_token'] = accessToken
@@ -176,6 +180,105 @@ def adminLogin():
 
     return allowCors(jsonify(resBlock))
 
+
+
+@app.route('/manager/', methods = ['POST'])
+@jwt_required
+@onlyAdminAllowed
+def addManager():
+    req = request.json
+    userName:str = req['username']
+
+    # chain condition
+    ret = False
+
+    # response block
+    resBlock = {
+        "msg" : None,                       # str
+        "exists" : None,                    # bool
+        "pending" : None,                   # bool
+        "manager" : None,                   # bool
+        "status" : False                    # bool
+    }
+
+    try:
+        isExists, pending, isManager = dbOperation.userExists(userName.strip().lower(), app.DB)
+
+        if isExists:
+            resBlock['msg'] = "User already exists"
+            resBlock['pending'] = pending
+            resBlock['manager'] = isManager
+            resBlock['exists'] = True
+            raise end(Exception)
+
+
+        # Creating user block to insert into the database
+        block = {
+            "name" : f'{req["name"].strip()}',
+            "username" : f'{req["username"].strip().lower()}',
+            "password" : f'{req["password"].strip()}',
+        }
+
+        if app.DB.insert([block], getenv('MANAGER_COLLECTION')) != None:
+            resBlock['msg'] = "User added"
+            resBlock['status'] = True
+            raise final(Exception)
+        
+        resBlock['msg'] = "Failed to add user"
+        raise end(Exception)
+
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+
+    except final:
+        return allowCors(jsonify(resBlock))
+
+
+@app.route('/manager/', methods = ['DELETE'])
+@jwt_required
+@onlyAdminAllowed
+def removeManager():
+    req = request.json
+    userName:str = req['username']
+
+
+    # response block
+    resBlock = {
+        "msg" : None,                       # str
+        "exists" : True,                    # bool
+        "pending" : None,                   # bool
+        "manager" : None,                   # bool
+        "status" : False                    # bool
+    }
+
+    try:
+        isExists, pending, isManager = dbOperation.userExists(userName.strip().lower(), app.DB)
+
+        if not isManager:
+            resBlock['msg'] = "User is not manager"
+            resBlock['pending'] = pending
+            resBlock['manager'] = isManager
+            resBlock['exists'] = False
+            raise end(Exception)
+
+
+        block = {
+            "username" : f'{req["username"].strip().lower()}',
+        }
+
+        if app.DB.remove(block, getenv('MANAGER_COLLECTION')) != None:
+            resBlock['msg'] = "Manager removed"
+            resBlock['status'] = True
+            raise final(Exception)
+        
+        resBlock['msg'] = "Failed to remove manager"
+        raise end(Exception)
+
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+
+    except final:
+        return allowCors(jsonify(resBlock))
 
 
 @app.route('/api/users/', methods = ['GET'])
