@@ -22,10 +22,10 @@ from flask_jwt_extended import (
 #   Change User Admin           [Pending]
 #   Delete User Admin           [DONE]
 #   
-#   Add sub Share
-#   Delete sub share
-#   Add user into sub share
-#   Delete user from sub share
+#   Add sub Share               [Pending]
+#   Delete sub share            [Pending]
+#   Add user into sub share     [DONE]
+#   Delete user from sub share  [DONE]
 
 
 @app.route('/userAdmin/add/', methods=['POST'])
@@ -148,8 +148,6 @@ def removeUserAdmin():
 
 
 
-
-
 @app.route('/userAdmin/sharedUser/', methods=['POST', 'DELETE'])
 @jwt_required
 def addSharedUser():
@@ -218,6 +216,72 @@ def addSharedUser():
                             raise final(Exception)
                         else:
                             resBlock['msg'] = "Failed to add admin while saving into the database"
+                            raise end(Exception)
+
+        raise end(Exception)
+
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+    except final:
+        return allowCors(jsonify(resBlock))
+
+
+
+
+@app.route('/userAdmin/writable/', methods=['PUT'])
+@jwt_required
+def changePermission():
+    req = request.json
+
+    # Response Block
+    resBlock = {
+        "msg" : None,
+        "is_server_exists" : False,
+        "is_host_exists" : False,
+        "status" : False
+    }
+
+
+    try:
+        if isRequiredDataAvailable(req, ["host_name", "server_name", "server_address", "writable"]) == False:
+            resBlock['msg'] = "No JSON data found"
+            raise end(Exception)
+
+        # Some other checks regarding username and KEY
+        isExists, pending, isManager = dbOperation.userExists(get_jwt_identity().strip().lower(), app.DB)
+
+        manager = isManager
+
+        if not (isExists or isManager):
+            resBlock['msg'] = "Request is sent from unauthorized user"
+            raise end(Exception)
+
+        servers = getServers(app.DB)
+
+        for server in servers:
+            if server.get('name') == req.get('server_name') and server.get('address') == req.get('server_address'):
+                resBlock['is_server_exists'] = True
+                hosts = server.get('hosts')
+
+                for host in hosts:
+                    if host.get('name') == req.get('host_name'):
+                        resBlock['is_host_exists'] = True
+
+                        admin = host['admin']
+
+                        if admin['name'] != get_jwt_identity() and manager != True:
+                            resBlock['msg'] = "Request is sent from unauthorized user"
+                            raise end(Exception)
+
+                        admin['writable'] = True if req.get('writable') == True else False
+
+                        ret, msg = app.DB.update_doc({"address" : server.get('address')}, {"hosts" : hosts}, getenv('SERVER_COLLECTION'))
+                        if ret:
+                            resBlock['msg'] = "Operation successful"
+                            resBlock['status'] = True
+                            raise final(Exception)
+                        else:
+                            resBlock['msg'] = "Failed to update config while saving into the database"
                             raise end(Exception)
 
         raise end(Exception)

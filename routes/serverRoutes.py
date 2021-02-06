@@ -29,7 +29,7 @@ def getServerData():
 
 
 @app.route('/user/servers/', methods = ['GET'])
-#@jwt_required
+@jwt_required
 @onlyselfAllowed
 def getServerDataForUser():
     req = request.json
@@ -38,6 +38,7 @@ def getServerDataForUser():
     resBlock = {
         "msg" : None,
         "data" : [],
+        "shared" : [],
         "status" : False
     }
 
@@ -47,22 +48,43 @@ def getServerDataForUser():
             raise end(Exception)
 
         resServer = []
+        resShared = []
         
         servers = getServers(app.DB)
 
         for server in servers:
             hosts = server.get('hosts')
             for host in hosts:
+                admin = host.get('admin')
+
+                is_you_user_admin = True if admin.get('name') == req.get('username') else False
+
                 if req.get('username') in host.get('validUsers'):
                     resServer.append({
                         "server_name" : server.get('name'),
                         "is_running" : isServerAlive(server),
                         "address" : server.get('address'),
                         "host_name" : host.get('name'),
-                        "path" : host.get('path')
+                        "path" : host.get('path'),
+                        "is_you_user_admin" : is_you_user_admin,
+                        "admin" : admin if is_you_user_admin == True else False
+                    })
+
+                
+
+                if req.get('username') in admin.get('sharedUsers'):
+                    resShared.append({
+                        "server_name" : server.get('name'),
+                        "is_running" : isServerAlive(server),
+                        "address" : server.get('address'),
+                        "host_name" : host.get('name'),
+                        "path" : host.get('path'),
+                        "admin_name" : admin.get('name'),
+                        "writable" : admin.get('writable')
                     })
 
         resBlock['data'] = resServer
+        resBlock['shared'] = resShared
         resBlock['msg'] = "Operation successful"
         resBlock['status'] = True
         raise final

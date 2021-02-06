@@ -20,9 +20,11 @@ class Admin:
     def __init__(self, block:dict):
         self.sharedUsers:User = []
         self.name = ''
+        self.writable = False
         
         if block != None:
-            self.name = block.get('name')
+            self.name = '' if block.get('name') == None else block.get('name')
+            self.writable = False if block.get('writable') != True else True
             for item in block.get('sharedUsers'):
                 self.sharedUsers.append(User(item))
 
@@ -38,6 +40,7 @@ class Admin:
     def getBlock(self):
         return {
             "name" : self.name,
+            "writable" : self.writable,
             "sharedUsers" : getArrDict(self.sharedUsers)
         }
 
