@@ -4,6 +4,7 @@ import json
 import helper
 import requests
 
+from datetime           import timedelta
 from os                 import getenv
 from app                import app
 from app                import end, final
@@ -15,7 +16,8 @@ from NcloudUtils        import *
 
 from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
-    get_jwt_identity
+    get_jwt_identity, get_jwt_claims
+
 )
 
 
@@ -116,6 +118,7 @@ def login():
         "pending" : None,                   # bool
         "manager" : None,                   # bool
         "access_token": None,               # str
+        "user": None,                       # dict
         "status" : False                    # bool
     }
 
@@ -126,15 +129,27 @@ def login():
         resBlock['pending'] = pending
         resBlock['manager'] = isManager
 
+        user = None
+
         if not isExists:
             resBlock['msg'] = f'{req["username"]} not exists'
             raise end(Exception)
         
         elif isExists and pending:
             resBlock['msg'] = f'{req["username"]} is in pending list'
+            #Get user
+            user = app.DB.get_doc({"username" : username.strip().lower()}, getenv('PENDING_USER_COLLECTION'))
             raise end(Exception)
         
         else:
+            user = app.DB.get_doc({"username" : username.strip().lower()}, getenv('USER_COLLECTION' if not isManager else 'MANAGER_COLLECTION'))
+
+            resBlock['user'] = {
+                "name" : user.get('name'),
+                "username" : username.strip().lower(),
+                "manager" : isManager
+            }
+
             # Assuming that password is incorrect
             resBlock['msg'] = "Password Incorrect"
 
@@ -143,7 +158,10 @@ def login():
             }, getenv('USER_COLLECTION' if not isManager else 'MANAGER_COLLECTION'))
 
             if block.get('password') == req['password'].strip():
-                accessToken = create_access_token(identity = block.get('username').lower(), user_claims={'is_manager' : resBlock.get('manager')})
+                accessToken = create_access_token(identity = block.get('username').lower(), user_claims={
+                    'is_manager' : resBlock.get('manager'), 
+                    "name" : user.get('name'),
+                    "username" : user.get('username')}, expires_delta = timedelta(days = 300))
                 resBlock['msg'] = "Login Sucessful"
                 resBlock['status'] = True
                 resBlock['access_token'] = accessToken
@@ -153,6 +171,18 @@ def login():
     except end:
         return allowCors(jsonify(resBlock))
 
+
+@app.route('/user/')
+@jwt_required
+def sendSelf():
+    data = get_jwt_claims()
+
+    return allowCors(jsonify({
+        "name" : data.get("name"),
+        "username" : data.get("username"),
+        "manager" : data.get("is_manager"),
+        "admin" : data.get("is_admin")
+    }))
 
 
 @app.route('/admin/', methods = ['POST'])
@@ -283,7 +313,7 @@ def removeManager():
 
 @app.route('/api/users/', methods = ['GET'])
 def usersOps():
-    req = request.json
+    req = request.args
 
     user_type = "pending"
     if req.get('type') != 'pending':
