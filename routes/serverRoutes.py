@@ -7,7 +7,7 @@ import requests
 from os                 import getenv
 from app                import app, end, final
 from flask              import request, jsonify
-from middleWare         import allowCors, isValidKEY, onlyAdminAllowed, onlyselfAllowed, isRequiredDataAvailable
+from middleWare         import *
 from bson.json_util     import dumps
 from userUtils          import *
 from NcloudUtils        import *
@@ -18,7 +18,9 @@ from flask_jwt_extended import (
 )
 
 
-
+@app.route('/servers/', methods = ['OPTIONS'])
+def getServerData_dummy():
+    return allowCors(jsonify({}))
 
 @app.route('/servers/', methods = ['GET'])
 #@jwt_required
@@ -30,9 +32,9 @@ def getServerData():
 
 @app.route('/user/servers/', methods = ['GET'])
 @jwt_required
-@onlyselfAllowed
+@onlyselfAllowedINGET
 def getServerDataForUser():
-    req = request.json
+    req = request.args
 
     # Response block
     resBlock = {

@@ -202,13 +202,44 @@ def adminLogin():
     resBlock['msg'] = "Password Incorrect"
 
     if req.get('password') != '' and req.get('password') != None and req.get('password') == block.get('key'):
-        accessToken = create_access_token(identity = 'admin', user_claims={'is_admin' : True})
+        accessToken = create_access_token(identity = 'admin', user_claims={'is_admin' : True}, expires_delta = timedelta(days = 300))
         
         resBlock['msg'] = "Login Successful"
         resBlock['access_token'] = accessToken
         resBlock['status'] = True
 
     return allowCors(jsonify(resBlock))
+
+
+
+@app.route('/managers/', methods = ['GET'])
+@jwt_required
+@onlyAdminAllowed
+def getManagers():
+    resBlock = {
+        "msg" : None,
+        "managers": [],      # manager info blocks
+        "status": False      # bool
+    }
+
+    try:
+        block:dict = app.DB.get_docs({}, getenv('MANAGER_COLLECTION'))
+
+        if block == None:
+            resBlock['msg'] = "No managers found"
+            raise end(Exception)
+        
+        for item in block:
+            item.pop('password')
+            item.pop('_id')
+            resBlock['managers'].append(item)
+
+        resBlock['status'] = True
+        resBlock['msg'] = "Managers data fetched"
+        raise end(Exception)
+        
+    except end:
+        return allowCors(jsonify(resBlock))
 
 
 

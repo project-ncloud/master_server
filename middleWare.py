@@ -46,6 +46,19 @@ def onlyselfAllowed(func):
         return func(*args, **kwargs)
     return decorator
 
+def onlyselfAllowedINGET(func):
+    @wraps(func)
+    def decorator(*args, **kwargs):
+        req = request.args
+
+        if req.get('username') == None:
+            req = request.json
+
+        identity = get_jwt_identity()
+        if identity != req.get('username'): return allowCors(jsonify({"msg":"Username not allowed", "status": False}), 400)
+        return func(*args, **kwargs)
+    return decorator
+
 
 def allowCors(response, status = 200):
     response.headers.add("Access-Control-Allow-Origin", "*")
