@@ -68,6 +68,7 @@ def getServerDataForUser():
                         "address" : server.get('address'),
                         "host_name" : host.get('name'),
                         "path" : host.get('path'),
+                        "writable" : host.get('writable'),
                         "is_you_user_admin" : is_you_user_admin,
                         "admin" : admin if is_you_user_admin == True else False
                     })
