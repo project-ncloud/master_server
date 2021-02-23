@@ -76,7 +76,11 @@ def getServerDataForUser():
                         "writable" : host.get('writable'),
                         "is_you_user_admin" : is_you_user_admin,
                         "admin" : admin if is_you_user_admin == True else False,
-                        "validUsers" : host.get("validUsers") if is_you_user_admin == True else []
+                        "validUsers" : host.get("validUsers") if is_you_user_admin == True else [],
+                        "shared": {
+                            "writable" : admin.get("writable"),
+                            "shared" : admin.get("sharedUsers")
+                        } if is_you_user_admin else {}
                     })
 
                 
@@ -84,6 +88,8 @@ def getServerDataForUser():
                 if req.get('username') in admin.get('sharedUsers'):
                     resShared.append({
                         "server_name" : server.get('name'),
+                        "total": hdd.total,
+                        "used": hdd.used,
                         "is_running" : isServerAlive(server),
                         "address" : server.get('address'),
                         "host_name" : host.get('name'),
