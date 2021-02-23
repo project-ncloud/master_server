@@ -3,6 +3,7 @@ import dbOperation
 import json
 import helper
 import requests
+import psutil
 
 from os                 import getenv
 from app                import app, end, final
@@ -61,16 +62,21 @@ def getServerDataForUser():
 
                 is_you_user_admin = True if admin.get('name') == req.get('username') else False
 
+                hdd = psutil.disk_usage(host.get('path'))
+
                 if req.get('username') in host.get('validUsers'):
                     resServer.append({
                         "server_name" : server.get('name'),
+                        "total": hdd.total,
+                        "used": hdd.used,
                         "is_running" : isServerAlive(server),
                         "address" : server.get('address'),
                         "host_name" : host.get('name'),
                         "path" : host.get('path'),
                         "writable" : host.get('writable'),
                         "is_you_user_admin" : is_you_user_admin,
-                        "admin" : admin if is_you_user_admin == True else False
+                        "admin" : admin if is_you_user_admin == True else False,
+                        "validUsers" : host.get("validUsers") if is_you_user_admin == True else []
                     })
 
                 
