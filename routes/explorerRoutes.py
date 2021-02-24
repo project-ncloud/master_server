@@ -4,6 +4,7 @@ import json
 import helper
 import requests
 
+from datetime           import timedelta
 from os                 import getenv
 from app                import app, end, final
 from flask              import request, jsonify
@@ -92,6 +93,80 @@ def getDIR():
 
 
 
+    except end:
+        return allowCors(jsonify(resBlock), 400)
+    except final:
+        return allowCors(jsonify(resBlock))
+
+
+@app.route('/explorer/access/', methods=["GET"])
+@jwt_required
+@onlyselfAllowedINGET
+def get_access_for_permission():
+    req = request.args
+
+    # Response Block
+    resBlock = {
+        "msg" : None,
+        "token" : None,
+        "status" : False
+    }
+
+    tokenBLK = {
+        "writable": False,
+        "host_name": "",
+        "server_address": ""
+    }
+
+    try:
+        if isRequiredDataAvailable(req, ["server_name", "address", "host_name", "path"]) == False:
+            resBlock['msg'] = "Missing data"
+            raise end(Exception)
+
+        servers = getServers(app.DB)
+
+        targetHost = None
+
+        for server in servers:
+            if req.get("address") == server.get("address") and req.get("server_name") == server.get("name"):
+                hosts = server.get('hosts')
+                tokenBLK["server_address"] = server.get("address")
+
+                for host in hosts:
+                    if req.get("host_name") == host.get("name") and req.get("path") == host.get("path"):
+                        targetHost = host
+                        tokenBLK["host_name"] = host.get("name")
+                        break
+
+                break
+
+        
+        if targetHost == None:
+            resBlock["msg"] = "Host not found"
+            raise end(Exception)
+
+        
+            
+        is_valid_user = True if get_jwt_identity() in targetHost.get("validUsers") else False
+        is_shared_user = False
+
+        if is_valid_user:
+            tokenBLK["writable"] = targetHost.get("writable")
+
+        if is_valid_user == False and targetHost.get("admin") != None:
+            adminObj = targetHost.get("admin")
+            tokenBLK["writable"] = adminObj.get("writable")
+            is_shared_user = True if get_jwt_identity() in adminObj.get("sharedUsers") else False
+
+        if is_valid_user or is_shared_user:
+            resBlock["token"] = create_access_token(identity=get_jwt_claims(), user_claims=tokenBLK, expires_delta = timedelta(days = 300))
+            resBlock["msg"] = "Access granted"
+            resBlock["status"] = True
+            raise final(Exception)
+        else:
+            resBlock["msg"] = "User not found"
+            raise end(Exception)
+                
     except end:
         return allowCors(jsonify(resBlock), 400)
     except final:
