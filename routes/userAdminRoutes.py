@@ -228,7 +228,7 @@ def addSharedUser():
 
 
 
-@app.route('/userAdmin/writable/', methods=['PUT'])
+@app.route('/userAdmin/writable/', methods=['POST'])
 @jwt_required
 def changePermission():
     req = request.json
