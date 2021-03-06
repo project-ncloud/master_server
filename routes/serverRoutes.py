@@ -62,14 +62,31 @@ def getServerDataForUser():
 
                 is_you_user_admin = True if admin.get('name') == req.get('username') else False
 
-                hdd = psutil.disk_usage(host.get('path'))
+                hdd = {
+                    "used": 0,
+                    "total": 0
+                }
 
-                if req.get('username') in host.get('validUsers'):
+                alive = isServerAlive(server)
+                if alive :
+                    try:
+                        res = requests.get(f'http://{server.get("address")}/host/info/', json = {
+                            "path": host.get('path')
+                        })
+
+                        if res.ok:
+                            hdd = res.json()
+                        else:
+                            raise Exception
+                    except Exception:
+                        print("Error Occurred :: While getting disk usage")
+
+                if req.get('username') in host.get('validUsers') or host.get('public') == True:
                     resServer.append({
                         "server_name" : server.get('name'),
-                        "total": hdd.total,
-                        "used": hdd.used,
-                        "is_running" : isServerAlive(server),
+                        "total": hdd.get("total"),
+                        "used": hdd.get("used"),
+                        "is_running" : alive,
                         "address" : server.get('address'),
                         "host_name" : host.get('name'),
                         "path" : host.get('path'),
@@ -88,9 +105,9 @@ def getServerDataForUser():
                 if req.get('username') in admin.get('sharedUsers'):
                     resShared.append({
                         "server_name" : server.get('name'),
-                        "total": hdd.total,
-                        "used": hdd.used,
-                        "is_running" : isServerAlive(server),
+                        "total": hdd.get("total"),
+                        "used": hdd.get("used"),
+                        "is_running" : alive,
                         "address" : server.get('address'),
                         "host_name" : host.get('name'),
                         "path" : host.get('path'),
