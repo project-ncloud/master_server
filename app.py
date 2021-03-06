@@ -9,6 +9,7 @@ from bson.json_util     import dumps
 from middleWare         import *
 from db                 import *
 from userUtils          import *
+from flask_cors         import CORS
 
 from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
@@ -29,6 +30,7 @@ class final(Exception):
 dotenv.load_dotenv(dotenv_path='./.env')
 
 app = Flask(__name__)
+CORS(app)
 app.config['JWT_SECRET_KEY'] = getenv('SECRET_KEY')
 jwt = JWTManager(app)
 
