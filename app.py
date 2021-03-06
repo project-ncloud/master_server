@@ -24,6 +24,10 @@ class final(Exception):
     pass
 
 
+
+# Load environment variables
+dotenv.load_dotenv(dotenv_path='./.env')
+
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = getenv('SECRET_KEY')
 jwt = JWTManager(app)
@@ -53,11 +57,13 @@ def protected():
 
 # Where server starts
 if __name__ == '__main__':
-    # Load environment variables
-    dotenv.load_dotenv(dotenv_path='./.env')
 
     # setup server vars
     DEBUG = True if getenv('TYPE') == 'dev' else False
 
     # Run server
     app.run(debug = DEBUG, host = '0.0.0.0', port = getenv('PORT'), load_dotenv = True)
+
+
+def create_app():
+    return app
